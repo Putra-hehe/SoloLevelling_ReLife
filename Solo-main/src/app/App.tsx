@@ -127,13 +127,11 @@ export default function App() {
   // Controls visibility of the new habit creation dialog. When true, the
   // HabitCreateDialog is shown allowing the user to customise and create
   // a new habit. This replaces the previous behaviour of immediately
-  // adding a default "New Habit". See handleAddHabit below.
+  // adding a default "New Habit".
   const [newHabitDialogOpen, setNewHabitDialogOpen] = useState(false);
 
   // Handler invoked when a new habit is created via the HabitCreateDialog.
-  // It appends the new habit to state and displays a success toast. The
-  // HabitCreateDialog will call this and handle closing itself. Keeping
-  // this logic here centralises state updates.
+  // It appends the new habit to state and displays a success toast.
   const handleCreateHabit = (habit: Habit) => {
     setAppState((prev) => ({ ...prev, habits: [...prev.habits, habit] }));
     toast.success("Habit created!");
@@ -153,7 +151,10 @@ export default function App() {
    * Shared helper for OAuth (Google/Facebook) + Email/Password flows.
    * Decides whether to load existing remote state or send the user to onboarding.
    */
-  async function completeLoginFromFirebaseUser(fbUser: FirebaseAuthUser, overrideName?: string) {
+  async function completeLoginFromFirebaseUser(
+    fbUser: FirebaseAuthUser,
+    overrideName?: string
+  ) {
     const uid = fbUser.uid;
     const email = fbUser.email || `${uid}@oauth.local`;
     const resolvedName = overrideName || fbUser.displayName || email.split("@")[0] || "Hero";
@@ -187,37 +188,55 @@ export default function App() {
       }
 
       /**
-       * Use a popup for OAuth on larger screens (desktop). On many mobile
-       * browsers the popup can be blocked, so we fall back to the redirect
-       * flow on small viewports. After a successful popup sign-in we
-       * immediately complete the login locally, avoiding a full page reload.
+       * Determine whether to use a popup or a full-page redirect for OAuth based on
+       * device characteristics. On many mobile browsers, popups are blocked or
+       * unreliable, so we prefer the redirect flow. We treat the viewport as
+       * mobile if either the screen width is below our mobile breakpoint (768px)
+       * or the user agent matches common mobile platforms. On larger screens
+       * we'll attempt a popup first and gracefully fall back to redirect if
+       * the popup is blocked or fails for any reason.
        */
-      const isSmallScreen = typeof window !== "undefined" && window.innerWidth < 640;
-      if (!isSmallScreen) {
-        // Use popup on desktop so we can complete login without redirecting
-        const result = await signInWithPopup(auth, provider);
-        if (result.user) {
-          await completeLoginFromFirebaseUser(result.user);
+      const isMobileUA =
+        typeof navigator !== "undefined" &&
+        /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent,
+        );
+      const isSmallViewport = typeof window !== "undefined" && window.innerWidth < 768;
+      const shouldUseRedirect = isMobileUA || isSmallViewport;
+
+      if (!shouldUseRedirect) {
+        try {
+          const result = await signInWithPopup(auth, provider);
+          if (result.user) {
+            await completeLoginFromFirebaseUser(result.user);
+            return;
+          }
+        } catch (popupErr: any) {
+          // Some browsers block popups. If that happens, fall back to redirect.
+          console.warn(
+            "Popup login failed or was blocked, falling back to redirect",
+            popupErr,
+          );
         }
-      } else {
-        // Fallback to redirect flow on mobile
-        await signInWithRedirect(auth, provider);
       }
+      // Fallback to redirect flow on mobile and on popup failure
+      await signInWithRedirect(auth, provider);
     } catch (err: any) {
       const code = err?.code as string | undefined;
       if (code === "auth/unauthorized-domain") {
-        const host = typeof window !== "undefined" ? window.location.hostname : "(unknown host)";
+        const host =
+          typeof window !== "undefined" ? window.location.hostname : "(unknown host)";
         toast.error("Domain belum diizinkan", {
-          description:
-            `Tambahkan domain ini ke Firebase Console → Authentication → Settings → Authorized domains: ${host}`,
+          description: `Tambahkan domain ini ke Firebase Console → Authentication → Settings → Authorized domains: ${host}`,
         });
       } else if (code === "auth/operation-not-allowed") {
         toast.error("Provider belum diaktifkan", {
-          description:
-            "Aktifkan Google/Facebook di Firebase Console → Authentication → Sign-in method.",
+          description: "Aktifkan Google/Facebook di Firebase Console → Authentication → Sign-in method.",
         });
       } else {
-        toast.error("Login gagal", { description: err?.message || "Gagal login dengan provider." });
+        toast.error("Login gagal", {
+          description: err?.message || "Gagal login dengan provider.",
+        });
       }
       console.error("OAuth error:", err);
     }
@@ -471,7 +490,11 @@ export default function App() {
     }
   };
 
-  const handleOnboardingComplete = (userClass: UserClass, goal: string, schedule: string[]) => {
+  const handleOnboardingComplete = (
+    userClass: UserClass,
+    goal: string,
+    schedule: string[]
+  ) => {
     const newUser = createMockUser(
       pendingAuth?.name || "Hero",
       pendingAuth?.email || "hero@levelday.com",
@@ -561,11 +584,27 @@ export default function App() {
   };
 
   const handleCreateQuest = (quest: Quest) => {
+    // Append the new quest to state
     setAppState((prev) => ({
       ...prev,
       quests: [...prev.quests, quest],
     }));
-    toast.success("Quest created!", { description: "Time to start your adventure" });
+
+    // Provide more context in the toast depending on whether a due date was set
+    let description: string | undefined;
+    if (quest.dueDate) {
+      const dueKey = isoToLocalDateKey(quest.dueDate);
+      const todayKey = toLocalDateKey(new Date());
+      if (dueKey && dueKey !== todayKey) {
+        description = `Quest scheduled for ${dueKey}`;
+      } else {
+        description = "Time to start your adventure";
+      }
+    } else {
+      description = "Time to start your adventure";
+    }
+
+    toast.success("Quest created!", { description });
   };
 
   const handleOpenNewQuestDialog = (dueDateISO?: string) => {
@@ -620,9 +659,8 @@ export default function App() {
 
   // Habit Handlers
   /**
-   * Opens the habit creation dialog instead of immediately creating a
-   * habit. Users can customise the habit details (title, description,
-   * frequency, XP reward and colour) before it is added to the state.
+   * Opens the habit creation dialog instead of immediately creating a habit.
+   * Users can customise the habit details before it is added to the state.
    */
   const handleAddHabit = () => {
     setNewHabitDialogOpen(true);
