@@ -1,0 +1,16 @@
+{
+  "name": "solo",
+  "private": true,
+  "workspaces": [
+    "Solo-main"
+  ],
+  "scripts": {
+    "dev": "npm --workspace Solo-main run dev",
+    "build": "npm --workspace Solo-main run build",
+    "preview": "npm --workspace Solo-main run preview"
+  },
+  "dependencies": {
+    "@vercel/speed-insights": "^1.3.1",
+    "firebase": "^12.7.0"
+  }
+}
