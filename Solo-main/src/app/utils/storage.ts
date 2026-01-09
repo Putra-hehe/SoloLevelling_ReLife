@@ -1,6 +1,7 @@
 import { AppState } from "../types";
 import { db } from "../firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
+import { sanitizeForFirestore } from "./firestore";
 
 // Key used for localStorage fallback. Namespaced to avoid collisions with other apps.
 const STORAGE_KEY = "levelday_app_state";
@@ -97,7 +98,7 @@ async function performSave(userId: string, state: AppState): Promise<void> {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
 
   const ref = doc(db, COLLECTION_NAME, userId);
-  await setDoc(ref, state);
+  await setDoc(ref, sanitizeForFirestore(state));
 }
 
 /**

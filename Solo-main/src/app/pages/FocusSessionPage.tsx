@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Play, Pause, RotateCcw, Coffee, Zap, Trophy } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -15,6 +15,59 @@ export function FocusSessionPage({ onComplete }: FocusSessionPageProps) {
   const [isActive, setIsActive] = useState(false);
   const [isBreak, setIsBreak] = useState(false);
   const [completedSessions, setCompletedSessions] = useState(0);
+  const [dailyGoal, setDailyGoal] = useState(4);
+
+  const xpPerSession = useMemo(() => {
+    return duration === 25 ? 30 : duration === 45 ? 50 : 100;
+  }, [duration]);
+
+  const progress = useMemo(() => {
+    return ((duration * 60 - timeLeft) / (duration * 60)) * 100;
+  }, [duration, timeLeft]);
+
+  const goalProgress = useMemo(() => {
+    if (dailyGoal === 0) return 0;
+    return Math.min((completedSessions / dailyGoal) * 100, 100);
+  }, [completedSessions, dailyGoal]);
+
+  const handleSessionComplete = useCallback(() => {
+    setIsActive(false);
+
+    if (!isBreak) {
+      onComplete(duration, xpPerSession);
+      setCompletedSessions(prev => prev + 1);
+
+      // Auto-start break
+      setIsBreak(true);
+      setTimeLeft(5 * 60);
+    } else {
+      setIsBreak(false);
+      setTimeLeft(duration * 60);
+    }
+  }, [duration, isBreak, onComplete, xpPerSession]);
+
+  const toggleTimer = useCallback(() => {
+    setIsActive(prev => !prev);
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    setIsActive(false);
+    setTimeLeft(duration * 60);
+    setIsBreak(false);
+  }, [duration]);
+
+  const handleDurationChange = useCallback((newDuration: string) => {
+    const dur = Number.parseInt(newDuration, 10);
+    setDuration(dur);
+    setTimeLeft(dur * 60);
+    setIsActive(false);
+    setIsBreak(false);
+  }, []);
+
+  const handleGoalChange = useCallback((value: string) => {
+    const goal = Number.parseInt(value, 10);
+    setDailyGoal(goal);
+  }, []);
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -30,46 +83,10 @@ export function FocusSessionPage({ onComplete }: FocusSessionPageProps) {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isActive, timeLeft]);
-
-  const handleSessionComplete = () => {
-    setIsActive(false);
-    
-    if (!isBreak) {
-      const xp = duration === 25 ? 30 : duration === 45 ? 50 : 100;
-      onComplete(duration, xp);
-      setCompletedSessions(prev => prev + 1);
-      
-      // Auto-start break
-      setIsBreak(true);
-      setTimeLeft(5 * 60);
-    } else {
-      setIsBreak(false);
-      setTimeLeft(duration * 60);
-    }
-  };
-
-  const toggleTimer = () => {
-    setIsActive(!isActive);
-  };
-
-  const resetTimer = () => {
-    setIsActive(false);
-    setTimeLeft(duration * 60);
-    setIsBreak(false);
-  };
-
-  const handleDurationChange = (newDuration: string) => {
-    const dur = parseInt(newDuration);
-    setDuration(dur);
-    setTimeLeft(dur * 60);
-    setIsActive(false);
-    setIsBreak(false);
-  };
+  }, [handleSessionComplete, isActive, timeLeft]);
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
-  const progress = ((duration * 60 - timeLeft) / (duration * 60)) * 100;
 
   return (
     <div className="space-y-6">
@@ -180,7 +197,7 @@ export function FocusSessionPage({ onComplete }: FocusSessionPageProps) {
               <Trophy className="w-4 h-4 text-purple-400" />
               <span>
                 Complete to earn <span className="text-purple-400 font-medium">
-                  +{duration === 25 ? 30 : duration === 45 ? 50 : 100} XP
+                  +{xpPerSession} XP
                 </span>
               </span>
             </div>
@@ -207,11 +224,50 @@ export function FocusSessionPage({ onComplete }: FocusSessionPageProps) {
 
         <Card className="p-6 bg-card/50 backdrop-blur-sm border-border/50 text-center">
           <div className="text-3xl font-bold text-green-400 mb-2">
-            {completedSessions * (duration === 25 ? 30 : duration === 45 ? 50 : 100)}
+            {completedSessions * xpPerSession}
           </div>
           <p className="text-sm text-muted-foreground">XP Earned</p>
         </Card>
       </motion.div>
+
+      <Card className="p-6 bg-card/50 backdrop-blur-sm border-border/50 max-w-2xl mx-auto">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-semibold">Daily Focus Goal</h2>
+            <p className="text-sm text-muted-foreground">Set a target to build a consistent focus habit.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <Select value={dailyGoal.toString()} onValueChange={handleGoalChange}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 session</SelectItem>
+                <SelectItem value="2">2 sessions</SelectItem>
+                <SelectItem value="3">3 sessions</SelectItem>
+                <SelectItem value="4">4 sessions</SelectItem>
+                <SelectItem value="6">6 sessions</SelectItem>
+                <SelectItem value="8">8 sessions</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="flex-1 min-w-[220px]">
+              <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                <span>{completedSessions} completed</span>
+                <span>{dailyGoal} goal</span>
+              </div>
+              <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-purple-500 to-cyan-500 transition-all"
+                  style={{ width: `${goalProgress}%` }}
+                />
+              </div>
+            </div>
+            {completedSessions >= dailyGoal && dailyGoal > 0 && (
+              <span className="text-sm text-purple-300 font-medium">Goal achieved ✨</span>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {/* Tips */}
       <motion.div
